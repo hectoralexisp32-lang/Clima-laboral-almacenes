@@ -9,43 +9,40 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-MODELO = "openai/gpt-oss-120b"
+MODELO = "lopenai/gpt-oss-120b”
 
 SYSTEM_PROMPT = """
-Eres un consultor experto en clima laboral y retención de personal en empresas de almacenes, logística y distribución.
+Eres un consultor experto en clima laboral de almacenes y centros de distribución.
 
-Tu objetivo es mantener una conversación natural y empática con el colaborador para entender:
-
-- Ambiente de trabajo y clima laboral
-- Liderazgo de supervisores y jefes de área
+Mantén una conversación natural y empática. Pregunta sobre:
+- Ambiente de trabajo
+- Liderazgo de supervisores
 - Oportunidades de crecimiento
-- Condiciones físicas, seguridad y reconocimiento
-- Comunicación interna
-- Motivos que podrían llevar a la persona a renunciar
+- Condiciones físicas y seguridad
+- Comunicación y reconocimiento
 
-Al final de la conversación (cuando tengas suficiente información), genera ÚNICAMENTE un JSON con este formato exacto:
+Cuando tengas suficiente información, responde ÚNICAMENTE con este JSON (sin texto adicional):
 
 {
-  "nivel_satisfaccion": "bajo | medio | alto",
+  "ambiente_laboral": "malo | regular | bueno",
+  "liderazgo": "malo | regular | bueno",
+  "oportunidades_crecimiento": "malo | regular | bueno",
+  "condiciones_seguridad": "malo | regular | bueno",
+  "comunicacion_reconocimiento": "malo | regular | bueno",
   "riesgo_rotacion": "bajo | medio | alto",
-  "problemas_principales": ["problema 1", "problema 2", "problema 3"],
-  "fortalezas": ["fortaleza 1", "fortaleza 2"],
-  "recomendaciones_empresa": [
-    "recomendación concreta 1",
-    "recomendación concreta 2",
-    "recomendación concreta 3"
-  ],
-  "resumen": "resumen breve y profesional de la situación"
+  "problemas_principales": ["problema 1", "problema 2"],
+  "recomendaciones": ["recomendación 1", "recomendación 2", "recomendación 3"],
+  "resumen": "resumen breve y profesional"
 }
 
-Sé empático, profesional y orientado a soluciones.
+Sé claro, objetivo y orientado a mejorar el ambiente laboral.
 """
 
 st.set_page_config(page_title="Clima Laboral - Almacenes", page_icon="🏭", layout="centered")
 st.title("🏭 Evaluación de Clima Laboral - Almacenes")
-st.caption("Evaluación anónima para detectar oportunidades de mejora y reducir la rotación de personal")
+st.caption("Evaluación anónima por área y turno")
 
-# Inicializar variables
+# Inicializar
 if "evaluaciones" not in st.session_state:
     st.session_state.evaluaciones = []
 
@@ -58,13 +55,13 @@ if "messages" not in st.session_state:
 if "analisis_final" not in st.session_state:
     st.session_state.analisis_final = None
 
-# ========== PASO 1: Datos anónimos ==========
+# ========== Datos anónimos ==========
 if st.session_state.datos_iniciales is None:
     st.subheader("Datos de la evaluación (anónimo)")
 
     area = st.selectbox(
         "Área de trabajo",
-        ["Selecciona un área", "Picking", "Empaque", "Recibo", "Despacho", "Almacenaje", "Inventarios", "Calidad", "Otro"]
+        ["Selecciona un área", "PTL", "Embarques", "Resivo", "LI", "Pull", "Inventarios", "Calidad", "Otro"]
     )
 
     turno = st.selectbox(
@@ -74,10 +71,7 @@ if st.session_state.datos_iniciales is None:
 
     if st.button("Comenzar evaluación"):
         if area != "Selecciona un área" and turno != "Selecciona un turno":
-            st.session_state.datos_iniciales = {
-                "area": area,
-                "turno": turno
-            }
+            st.session_state.datos_iniciales = {"area": area, "turno": turno}
             st.session_state.messages = [
                 {
                     "role": "assistant",
@@ -88,16 +82,14 @@ if st.session_state.datos_iniciales is None:
         else:
             st.warning("Por favor selecciona el Área y el Turno.")
 
-# ========== PASO 2: Conversación ==========
+# ========== Conversación ==========
 else:
-    st.info(f"Evaluación anónima | Área: **{st.session_state.datos_iniciales['area']}** | Turno: **{st.session_state.datos_iniciales['turno']}**")
+    st.info(f"Área: **{st.session_state.datos_iniciales['area']}** | Turno: **{st.session_state.datos_iniciales['turno']}**")
 
-    # Mostrar historial de chat
     for msg in st.session_state.messages:
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
 
-    # Entrada del usuario
     if prompt := st.chat_input("Cuéntame tu experiencia..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         
@@ -111,7 +103,7 @@ else:
                         model=MODELO,
                         messages=[{"role": "system", "content": SYSTEM_PROMPT}] +
                                  [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages],
-                        temperature=0.7,
+                        temperature=0.6,
                     )
                     respuesta = response.choices[0].message.content
                     st.markdown(respuesta)
@@ -121,58 +113,61 @@ else:
 
         st.session_state.messages.append({"role": "assistant", "content": respuesta})
 
-        # Detectar JSON
-        if "{" in respuesta and "nivel_satisfaccion" in respuesta:
+        if "{" in respuesta and "ambiente_laboral" in respuesta:
             try:
                 inicio = respuesta.find("{")
                 fin = respuesta.rfind("}") + 1
                 analisis = json.loads(respuesta[inicio:fin])
                 st.session_state.analisis_final = analisis
 
-                # Guardar evaluación completa (anónima)
                 evaluacion = {
                     "fecha": datetime.now().strftime("%Y-%m-%d %H:%M"),
                     "area": st.session_state.datos_iniciales["area"],
                     "turno": st.session_state.datos_iniciales["turno"],
-                    "nivel_satisfaccion": analisis.get("nivel_satisfaccion", ""),
+                    "ambiente_laboral": analisis.get("ambiente_laboral", ""),
+                    "liderazgo": analisis.get("liderazgo", ""),
+                    "oportunidades_crecimiento": analisis.get("oportunidades_crecimiento", ""),
+                    "condiciones_seguridad": analisis.get("condiciones_seguridad", ""),
+                    "comunicacion_reconocimiento": analisis.get("comunicacion_reconocimiento", ""),
                     "riesgo_rotacion": analisis.get("riesgo_rotacion", ""),
                     "problemas_principales": " | ".join(analisis.get("problemas_principales", [])),
-                    "fortalezas": " | ".join(analisis.get("fortalezas", [])),
-                    "recomendaciones": " | ".join(analisis.get("recomendaciones_empresa", [])),
+                    "recomendaciones": " | ".join(analisis.get("recomendaciones", [])),
                     "resumen": analisis.get("resumen", "")
                 }
                 st.session_state.evaluaciones.append(evaluacion)
-
             except:
                 pass
 
-    # Mostrar resultado individual
+    # ========== Resultado desglosado ==========
     if st.session_state.analisis_final:
         st.divider()
-        st.subheader("📊 Resultado de esta evaluación")
+        st.subheader("📊 Resultado desglosado")
 
         a = st.session_state.analisis_final
 
         col1, col2 = st.columns(2)
-        col1.metric("Nivel de Satisfacción", a.get("nivel_satisfaccion", "—").upper())
-        col2.metric("Riesgo de Rotación", a.get("riesgo_rotacion", "—").upper())
+
+        with col1:
+            st.metric("Ambiente laboral", a.get("ambiente_laboral", "—").upper())
+            st.metric("Liderazgo", a.get("liderazgo", "—").upper())
+            st.metric("Oportunidades de crecimiento", a.get("oportunidades_crecimiento", "—").upper())
+
+        with col2:
+            st.metric("Condiciones y seguridad", a.get("condiciones_seguridad", "—").upper())
+            st.metric("Comunicación y reconocimiento", a.get("comunicacion_reconocimiento", "—").upper())
+            st.metric("Riesgo de rotación", a.get("riesgo_rotacion", "—").upper())
 
         st.markdown("**Resumen:**")
         st.info(a.get("resumen", ""))
 
         if a.get("problemas_principales"):
-            st.markdown("**Principales problemas detectados:**")
+            st.markdown("**Problemas principales:**")
             for p in a["problemas_principales"]:
                 st.write(f"• {p}")
 
-        if a.get("fortalezas"):
-            st.markdown("**Fortalezas identificadas:**")
-            for f in a["fortalezas"]:
-                st.write(f"• {f}")
-
-        if a.get("recomendaciones_empresa"):
+        if a.get("recomendaciones"):
             st.markdown("**Recomendaciones para la empresa:**")
-            for r in a["recomendaciones_empresa"]:
+            for r in a["recomendaciones"]:
                 st.write(f"• {r}")
 
     if st.button("🔄 Empezar nueva evaluación"):
@@ -181,14 +176,13 @@ else:
         st.session_state.analisis_final = None
         st.rerun()
 
-# ========== DESCARGA DE DATOS ==========
+# ========== Descarga ==========
 st.divider()
-st.subheader("📥 Descargar datos recolectados")
+st.subheader("📥 Descargar datos")
 
 if st.session_state.evaluaciones:
     df = pd.DataFrame(st.session_state.evaluaciones)
-
-    st.write(f"Se han recolectado **{len(df)}** evaluaciones anónimas.")
+    st.write(f"**{len(df)}** evaluaciones recolectadas")
     st.dataframe(df, use_container_width=True)
 
     csv = df.to_csv(index=False).encode("utf-8")
@@ -198,17 +192,9 @@ if st.session_state.evaluaciones:
         file_name=f"clima_laboral_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
         mime="text/csv"
     )
-
-    json_data = json.dumps(st.session_state.evaluaciones, ensure_ascii=False, indent=2)
-    st.download_button(
-        label="⬇️ Descargar JSON",
-        data=json_data,
-        file_name=f"clima_laboral_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
-        mime="application/json"
-    )
 else:
     st.info("Aún no hay evaluaciones guardadas.")
 
 st.markdown("---")
-st.caption("Evaluación 100% anónima. No se recolectan nombres ni datos personales.")
+st.caption("Evaluación 100% anónima. No se recolectan datos personales.")
 
