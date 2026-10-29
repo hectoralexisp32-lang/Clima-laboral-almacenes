@@ -9,7 +9,7 @@ client = OpenAI(
     base_url="https://api.groq.com/openai/v1"
 )
 
-MODELO = "openai/gpt-oss-120b”
+MODELO = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = """
 Eres un consultor experto en clima laboral de almacenes y centros de distribución.
